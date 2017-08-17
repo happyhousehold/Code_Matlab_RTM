@@ -1,0 +1,122 @@
+%%  Nystrom Methods for Acoustic Direct Obstacle Scattering with Dirichelt Boundary condition
+function U=Nystrom(n, n_src, n_recv, bctype,wavenumber)
+%% if bctype==0 Dirichlet
+%% if bctype==1 Impenetrable BC
+%% compute the quadrature weights;
+%% d is incidient direction d=(cos(theta),sin(theta))
+w = quad_weights(n);
+R = zeros(2*n);
+
+for k=1:2*n
+     idx=[k:2*n];
+     R(idx,k)=w([1:2*n-k+1]);
+     R(k,k)=R(k,k)/2;  %% for convinience
+end
+R=(R+R');
+%% discrete point
+node = 0:2*n-1;
+t = pi*node(:)/n;
+if bctype==1
+    [x1,x2]=circlebc(t,1);   
+    [dx1,dx2]=circlebc(t,2);
+    [ddx1,ddx2]=circlebc(t,3);
+else
+    [x1,x2]=kite(t,1);   
+    [dx1,dx2]=kite(t,2);
+    [ddx1,ddx2]=kite(t,3);
+end
+% figure
+% line(x1,x2)
+r = zeros(2*n);
+
+for k=1:2*n
+    for j=1:2*n
+        r(k,j)=sqrt((x1(j)-x1(k))* (x1(j)-x1(k))+(x2(j)-x2(k))* (x2(j)-x2(k)));
+    end
+end
+
+L1 = zeros(2*n);
+M1 = zeros(2*n);
+L2 = zeros(2*n);
+M2 = zeros(2*n);
+Ceuler = 0.577215665;
+distance = sqrt( dx1.*dx1+dx2.*dx2 );
+
+for j=1:2*n
+    for k=1:2*n
+        if (j==k)
+            dist = distance(k);
+            M1(j,k) = -1/(2*pi)*besselj(0,wavenumber*r(j,k))*dist;
+            L2(j,k) = 1/(2*pi)*(dx1(j)*ddx2(j)-dx2(j)*ddx1(j))/(dist*dist);
+            M2(j,k) = (i/2-Ceuler/pi-1/(2*pi)*log(wavenumber^2/4*dist*dist))*dist;
+        else
+            dist = distance(k);
+            temp = dx2(k)*(x1(j)-x1(k))-dx1(k)*(x2(j)-x2(k));
+            
+            L1(j,k) = wavenumber/(2*pi)*temp*besselj(1,wavenumber*r(j,k))/r(j,k);
+            L2(j,k) = i*wavenumber/2*(-temp)*besselh(1,wavenumber*r(j,k))/r(j,k) - L1(j,k)*log(4*sin((t(j)-t(k))/2)^2);
+            M1(j,k) = -1/(2*pi)*besselj(0,wavenumber*r(j,k))*dist;
+            M2(j,k) = i/2*besselh(0,wavenumber*r(j,k))*dist - M1(j,k)*log(4*sin((t(j)-t(k))/2)^2);
+        end
+    end
+end
+%% the linear System is A = I-(L1+ik*M1 +pi/n*(L2+ik*M2))
+
+eta = wavenumber; 
+A=eye(2*n) - (R.*(L1+i*eta*M1)+pi/n*(L2+i*eta*M2));
+
+
+%% the right hand side is double of incidient, the incident is plane wave 
+
+d1=1;  %% cos(theta)
+d2=0;  %% sin(theta) for testing
+theta = 2*pi/n_src*[0:n_src-1];
+d1 = cos(theta);
+d2 = sin(theta);
+f = 2*(-exp(1i*wavenumber*(x1*d1+x2*d2)));
+
+%% the solution is the potential on the boundary of D
+
+phi = A\f; %% Combine layer potential
+% phi = (R.*M1+pi/n*M2)\f; %% Single layer potential
+
+%% Composite Trapzitol Formula for Computing Far fields pattern
+
+theta = 2*pi/n_recv*[0:n_recv-1];
+
+lambda = exp(-1i*pi/4)/sqrt(8*pi*wavenumber);
+for j=1:n_src
+    for k=1:n_recv
+        xhat = cos(theta(k));
+        yhat = sin(theta(k));
+        temp = (wavenumber*( xhat*dx2 - yhat*dx1) + eta*distance).*(exp(-1i*wavenumber*(xhat*x1+yhat*x2))).*phi(:,j);
+       %% temp =  distance.*(exp(-i*wavenumber*(xhat*x1+yhat*x2))).*phi(:,j);
+        U(k,j)=lambda*sum(temp)*pi/n;
+    end
+end
+
+% Nx = 201;
+% Nz = 201;
+% Irtm = zeros(Nx,Nz);
+% x = linspace( -3, 3, Nx);
+% z = linspace( -3, 3, Nz);
+% Nfreq = 1;
+% for ix = 1 : Nx
+%     for iz = 1: Nz
+%         for k=1:Nfreq
+%             gz = exp(i*wavenumber*(x(ix)*cos(theta)+z(iz)*sin(theta)));
+%             Irtm(ix,iz)=Irtm(ix,iz)+sum((U(:,:)*gz(:)).*conj(gz(:)));
+%         end
+%     end
+% end
+% figure
+% [xx,zz]=meshgrid(x,z);
+% subplot(1,2,1)
+% imagesc(abs(real(Irtm))');
+% subplot(1,2,2);
+% 
+% mesh(xx,zz,abs(real(Irtm))');
+
+
+
+

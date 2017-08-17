@@ -1,0 +1,18 @@
+For circle:
+Nystrom Method for Synthesizing  Obstacle Scattering Data Complete......
+Elapsed time is 7.609174 seconds.
+Imaging via RTM method is completed......
+Elapsed time is 9.327991 seconds.
+The obstacle we are imaging is a circle.
+The maximum value of imag(Irtm) is  0.173455
+The minimum value of imag(Irtm) is  0.040050
+
+
+For kite:
+Nystrom Method for Synthesizing  Obstacle Scattering Data Complete......
+Elapsed time is 6.744947 seconds.
+Imaging via RTM method is completed......
+Elapsed time is 9.335634 seconds.
+The obstacle we are imaging is a kite.
+The maximum value of imag(Irtm) is  0.236152
+The minimum value of imag(Irtm) is  0.024409

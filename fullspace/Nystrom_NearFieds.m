@@ -1,0 +1,95 @@
+function U=Nystrom_NearFieds(n, n_src, n_recv, bctype,wavenumber, source,receiver)
+
+%% For non-penetrable obstacle 
+%% Source: positon of source; Receive: position of receive
+%% Updated by Fang Shaofeng at 10/18/2015 
+
+%% compute the quadrature weights;
+w = quad_weights(n);
+R = zeros(2*n);
+
+for k=1:2*n
+     idx=[k:2*n];
+     R(idx,k)=w([1:2*n-k+1]);
+     R(k,k)=R(k,k)/2;  %% for convinience
+end
+R=(R+R');
+
+%% discrete point
+node = 0:2*n-1;
+t = pi*node(:)/n;
+if bctype==1
+    [x1,x2]=circlebc(t,1);   
+    [dx1,dx2]=circlebc(t,2);
+    [ddx1,ddx2]=circlebc(t,3);
+else
+    [x1,x2]=kite(t,1);   
+    [dx1,dx2]=kite(t,2);
+    [ddx1,ddx2]=kite(t,3);
+end
+
+r = zeros(2*n);
+
+for k=1:2*n
+    for j=1:2*n
+        r(k,j)=sqrt((x1(j)-x1(k))* (x1(j)-x1(k))+(x2(j)-x2(k))* (x2(j)-x2(k)));
+    end
+end
+
+L1 = zeros(2*n);
+M1 = zeros(2*n);
+L2 = zeros(2*n);
+M2 = zeros(2*n);
+Ceuler = 0.577215665;
+distance = sqrt( dx1.*dx1+dx2.*dx2 );
+
+for j=1:2*n
+    for k=1:2*n
+        if (j==k)
+            dist = distance(k);
+            M1(j,k) = -1/(2*pi)*besselj(0,wavenumber*r(j,k))*dist;
+            L2(j,k) = 1/(2*pi)*(dx1(j)*ddx2(j)-dx2(j)*ddx1(j))/(dist*dist);
+            M2(j,k) = (1i/2-Ceuler/pi-1/(2*pi)*log(wavenumber^2/4*dist*dist))*dist;
+        else
+            dist = distance(k);
+            temp = dx2(k)*(x1(j)-x1(k))-dx1(k)*(x2(j)-x2(k));
+            
+            L1(j,k) = wavenumber/(2*pi)*temp*besselj(1,wavenumber*r(j,k))/r(j,k);
+            L2(j,k) = 1i*wavenumber/2*(-temp)*besselh(1,wavenumber*r(j,k))/r(j,k) - L1(j,k)*log(4*sin((t(j)-t(k))/2)^2);
+            M1(j,k) = -1/(2*pi)*besselj(0,wavenumber*r(j,k))*dist;
+            M2(j,k) = 1i/2*besselh(0,wavenumber*r(j,k))*dist - M1(j,k)*log(4*sin((t(j)-t(k))/2)^2);
+        end
+    end
+end
+
+%% For combined layer potential, the linear System is A = I-(L1+ik*M1 +pi/n*(L2+ik*M2))
+%% For single layer potential, the linear system is   S = (R.*M1+pi/n*M2);
+
+eta = wavenumber; 
+A=eye(2*n) - (R.*(L1+1i*eta*M1)+pi/n*(L2+1i*eta*M2));
+S = (R.*M1+pi/n*M2);
+
+%% the right hand side is double of incidient  
+for is=1:n_src
+    f(:,is) = -2*Green(wavenumber, source(:,is)*ones(1,2*n),[x1';x2']);
+end
+ 
+%% the solution is the potential on the boundary of D
+ phi = A\f;
+%%  phi = S\f;
+
+%% Composite Trapzitol Formula for Computing Near fields pattern
+
+U = zeros(n_recv,n_src);
+for j=1:n_src
+    for k=1:n_recv
+       
+        g1 = Green(wavenumber,receiver(:,k)*ones(1,2*n),[x1';x2']);
+        gd1 = Green_Grad(wavenumber,receiver(:,k)*ones(1,2*n), [x1';x2']); %% gradient w.r.t the second variable
+        temp = ( (gd1(1,:).*dx2' - gd1(2,:).*dx1') - (1i* eta*distance').*g1)*phi(:,j);%% For combined layer
+       %% temp = (g1.*distance')*phi(:,j); %% For single layer
+        U(k,j)=pi/n*temp;
+    end
+end
+
+
